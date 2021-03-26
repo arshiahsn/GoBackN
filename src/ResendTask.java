@@ -24,10 +24,10 @@ public class ResendTask extends TimerTask {
      * @param seq_	Sequence number of the packet to resend
      * @param udpSocket_ the UDP socket used to send the packets
      */
-    public ResendTask(ConcurrentLinkedQueue<DatagramPacket> gbnQ_, DatagramSocket udpSocket_, int seq_){
+    public ResendTask(ConcurrentLinkedQueue<DatagramPacket> gbnQ_, int SeqNo, DatagramSocket udpSocket_){
         this.gbnQ = gbnQ_;
         udpSocket = udpSocket_;
-        seq = seq_;
+        seq = seqNo;
     }
 
     @Override

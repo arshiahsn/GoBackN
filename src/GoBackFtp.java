@@ -140,16 +140,70 @@ public class GoBackFtp {
 	}
 
 
-	public synchronized void startTimerTask(ResendTask resendTask){
-		timer.scheduleAtFixedRate(resendTask, rtoTimer, rtoTimer);
-	}
+
 
 	public synchronized void cancelTimerTask(ResendTask resendTask){
 		resendTask.cancel();
 	}
 
 
+	public class Attributes {
+		private String serverName;
+		private int serverPort;
 
+		public String getServerName() {
+			return serverName;
+		}
+
+		public void setServerName(String serverName) {
+			this.serverName = serverName;
+		}
+
+		public int getServerPort() {
+			return serverPort;
+		}
+
+		public void setServerPort(int serverPort) {
+			this.serverPort = serverPort;
+		}
+
+		public String getFileName() {
+			return fileName;
+		}
+
+		public void setFileName(String fileName) {
+			this.fileName = fileName;
+		}
+
+		public int getWindowSize() {
+			return windowSize;
+		}
+
+		public void setWindowSize(int windowSize) {
+			this.windowSize = windowSize;
+		}
+
+		public int getInitSeqNo() {
+			return initSeqNo;
+		}
+
+		public void setInitSeqNo(int initSeqNo) {
+			this.initSeqNo = initSeqNo;
+		}
+
+		private String fileName;
+		private int windowSize;
+		private int initSeqNo;
+
+		public Attributes(String serverName, int serverPort, String fileName, int windowSize, int initSeqNo) {
+			this.serverName = serverName;
+			this.serverPort = serverPort;
+			this.fileName = fileName;
+			this.windowSize = windowSize;
+			this.initSeqNo = initSeqNo;
+		}
+
+	}
 
 
 	/**
@@ -163,25 +217,13 @@ public class GoBackFtp {
 	public void send(String serverName, int serverPort, String fileName) throws FtpException, IOException {
 		setServerName(serverName);
 		handshake(serverName, serverPort, fileName, udpSocket.getLocalPort());
-		int bufferSize = getWindowSize()*MAX_PAYLOAD_SIZE;
-		byte[] sendBuffer = new byte[bufferSize];
-		byte[] receiveBuffer = new byte[bufferSize];
-		int bytesRead;
-		setCurrentSeqNo(getInitSeqNo());
-		File file = new File(fileName);
-		FileInputStream inputStream = new FileInputStream(fileName);
-		while((bytesRead = inputStream.read(sendBuffer)) != -1){
-			if (bytesRead < bufferSize){
-				byte[] smallerData = new byte[bytesRead];
-				System.arraycopy(sendBuffer, 0, smallerData, 0, bytesRead);
-				sendBuffer = smallerData;
-			}
-			gbnQ = makeQ(sendBuffer, getCurrentSeqNo());
-			SendTask sendTask = new SendTask(gbnQ);
+		Attributes atts = new Attributes(serverName, serverPort, fileName, getWindowSize(), getInitSeqNo());
+
+			SendTask sendTask = new SendTask(getGbnQ(), atts, getUdpSocket(), getRtoTimer());
 			ResendTask resendTask = new ResendTask(gbnQ, udpSocket, getCurrentSeqNo());
 			startTimerTask(resendTask);
 			ReceiveTask receiveTask = new ReceiveTask(gbnQ);
-			cancelTimerTask(resendTask);
+			cancelTimerTask(timerTask);
 
 
 
@@ -190,7 +232,7 @@ public class GoBackFtp {
 
 
 
-	}
+
 
 	public ConcurrentLinkedQueue<DatagramPacket> makeQ(byte[] sendBuffer, int initSeqNo) throws UnknownHostException {
 		ConcurrentLinkedQueue<DatagramPacket> q = new ConcurrentLinkedQueue();
