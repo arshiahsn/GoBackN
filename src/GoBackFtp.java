@@ -10,13 +10,9 @@
  *
  */
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.Socket;
+import java.io.*;
+import java.net.*;
+import java.nio.ByteBuffer;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -26,63 +22,103 @@ import java.util.logging.*;
 
 public class GoBackFtp {
 
+	public long getFileLen() {
+		return fileLen;
+	}
 
-	/**
-	 * Resend Timer class that extends the TimerTask
-	 * The purpose of this class is to resend the packets
-	 * if the ack is not received after timeout happens
-	 *
-	 */
-	public class ResendTask extends TimerTask {
+	public void setFileLen(long fileLen) {
+		this.fileLen = fileLen;
+	}
 
-		private DatagramPacket pkt;
-		private DatagramSocket udpSocket;
-		private int seq;
-		private ConcurrentLinkedQueue gbnQ;
+	public int getServerUdpPort() {
+		return serverUdpPort;
+	}
 
+	public void setServerUdpPort(int serverUdpPort) {
+		this.serverUdpPort = serverUdpPort;
+	}
 
-		/**
-		 * Constructor to resend timer
-		 *
-		 * @param gbnQ	Hold a copy of the packet to send to avoid race conditions
-		 * @param seq_	Sequence number of the packet to resend
-		 * @param udpSocket_ the UDP socket used to send the packets
-		 */
-		public ResendTask(ConcurrentLinkedQueue gbnQ, DatagramSocket udpSocket_, int seq_){
-			this.gbnQ = gbnQ;
-			udpSocket = udpSocket_;
-			seq = seq_;
-		}
+	public int getInitSeqNo() {
+		return initSeqNo;
+	}
 
-		@Override
-		public void run() {
-			System.out.println("timeout\t");
-			try {
-				udpSocket.send(pkt);
-				System.out.println("retx\t" + seq);
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
+	public void setInitSeqNo(int initSeqNo) {
+		this.initSeqNo = initSeqNo;
+	}
 
-		}
+	public static int getMaxPayloadSize() {
+		return MAX_PAYLOAD_SIZE;
+	}
 
+	public ConcurrentLinkedQueue getGbnQ() {
+		return gbnQ;
+	}
+
+	public void setGbnQ(ConcurrentLinkedQueue gbnQ) {
+		this.gbnQ = gbnQ;
+	}
+
+	public Timer getTimer() {
+		return timer;
+	}
+
+	public void setTimer(Timer timer) {
+		this.timer = timer;
+	}
+
+	public DatagramSocket getUdpSocket() {
+		return udpSocket;
+	}
+
+	public void setUdpSocket(DatagramSocket udpSocket) {
+		this.udpSocket = udpSocket;
+	}
+
+	public int getRtoTimer() {
+		return rtoTimer;
+	}
+
+	public void setRtoTimer(int rtoTimer) {
+		this.rtoTimer = rtoTimer;
+	}
+
+	public int getWindowSize() {
+		return windowSize;
+	}
+
+	public void setWindowSize(int windowSize) {
+		this.windowSize = windowSize;
+	}
+	public int getCurrentSeqNo() {
+		return currentSeqNo;
+	}
+
+	public void setCurrentSeqNo(int currentSeqNo) {
+		this.currentSeqNo = currentSeqNo;
+	}
+
+	public String getServerName() {
+		return serverName;
+	}
+
+	public void setServerName(String serverName) {
+		this.serverName = serverName;
 	}
 
 
-
-
-
-	// global logger
-	private static final Logger logger = Logger.getLogger("GoBackFtp");
-	private long fileLen;
-	private int serverUdpPort;
 	private int initSeqNo;
+	private int currentSeqNo;
 	public final static int MAX_PAYLOAD_SIZE = 1400; // bytes
-	private ConcurrentLinkedQueue gbnQ;
+	private ConcurrentLinkedQueue<DatagramPacket> gbnQ;
 	private Timer timer;
 	DatagramSocket udpSocket;
 	private int rtoTimer;
 	private int windowSize;
+	// global logger
+	private static final Logger logger = Logger.getLogger("GoBackFtp");
+	private long fileLen;
+	private int serverUdpPort;
+	private String serverName;
 
 	/**
 	 * Constructor to initialize the program
@@ -93,7 +129,6 @@ public class GoBackFtp {
 	public GoBackFtp(int windowSize, int rtoTimer){
 		this.windowSize = windowSize;
 		this.rtoTimer = rtoTimer;
-		gbnQ = new ConcurrentLinkedQueue();
 		timer = new Timer();
 		try{
 			udpSocket = new DatagramSocket();
@@ -125,12 +160,62 @@ public class GoBackFtp {
 	 * @param fileName		Name of the file to be trasferred to the rmeote server
 	 * @throws FtpException If anything goes wrong while sending the file
 	 */
-	public void send(String serverName, int serverPort, String fileName) throws FtpException{
-
+	public void send(String serverName, int serverPort, String fileName) throws FtpException, IOException {
+		setServerName(serverName);
 		handshake(serverName, serverPort, fileName, udpSocket.getLocalPort());
+		int bufferSize = getWindowSize()*MAX_PAYLOAD_SIZE;
+		byte[] sendBuffer = new byte[bufferSize];
+		byte[] receiveBuffer = new byte[bufferSize];
+		int bytesRead;
+		setCurrentSeqNo(getInitSeqNo());
+		File file = new File(fileName);
+		FileInputStream inputStream = new FileInputStream(fileName);
+		while((bytesRead = inputStream.read(sendBuffer)) != -1){
+			if (bytesRead < bufferSize){
+				byte[] smallerData = new byte[bytesRead];
+				System.arraycopy(sendBuffer, 0, smallerData, 0, bytesRead);
+				sendBuffer = smallerData;
+			}
+			gbnQ = makeQ(sendBuffer, getCurrentSeqNo());
+			SendTask sendTask = new SendTask(gbnQ);
+			ResendTask resendTask = new ResendTask(gbnQ, udpSocket, getCurrentSeqNo());
+			startTimerTask(resendTask);
+			ReceiveTask receiveTask = new ReceiveTask(gbnQ);
+			cancelTimerTask(resendTask);
 
 
 
+
+		}
+
+
+
+	}
+
+	public ConcurrentLinkedQueue<DatagramPacket> makeQ(byte[] sendBuffer, int initSeqNo) throws UnknownHostException {
+		ConcurrentLinkedQueue<DatagramPacket> q = new ConcurrentLinkedQueue();
+		int startIdx = 0;
+		int len = sendBuffer.length;
+		byte[] packetBuffer;
+		int seqNo = initSeqNo;
+
+		while(len > 0){
+			if(len < MAX_PAYLOAD_SIZE)
+				packetBuffer = new byte[len];
+			else
+				packetBuffer = new byte[MAX_PAYLOAD_SIZE];
+
+			ByteBuffer bb = ByteBuffer.wrap(sendBuffer);
+			bb.get(packetBuffer, startIdx, sendBuffer.length);
+			startIdx += (MAX_PAYLOAD_SIZE + 1);
+			FtpSegment seg = new FtpSegment(seqNo, packetBuffer);
+			DatagramPacket pkt = FtpSegment.makePacket(seg, InetAddress.getByName(getServerName()), getServerUdpPort());
+			q.add(pkt);
+			seqNo += 1;
+
+		}
+		setCurrentSeqNo(seqNo);
+		return q;
 	}
 
 
