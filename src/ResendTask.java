@@ -22,8 +22,6 @@ public class ResendTask extends TimerTask {
     /**
      * Constructor to resend timer
      *
-     * @param gbnQ_	Hold a copy of the packet to send to avoid race conditions
-     * @param seq_	Sequence number of the packet to resend
      * @param udpSocket_ the UDP socket used to send the packets
      */
     public ResendTask(GoBackFtp.Attributes atts, DatagramSocket udpSocket_){
@@ -35,8 +33,9 @@ public class ResendTask extends TimerTask {
     public void run() {
         System.out.println("timeout\t");
         try {
-            for (FtpSegment seg : GoBackFtp.getGbnQ()){
-                DatagramPacket pkt = FtpSegment.makePacket(seg, InetAddress.getByName(atts.getServerName()), atts.getServerPort());
+            for (FtpSegment seg : GoBackFtp.getGbnQ()){                                                                 /*Iterate the queue and resend all segments*/
+                DatagramPacket pkt = FtpSegment.makePacket(seg, InetAddress.getByName(atts.getServerName()),            
+                        atts.getServerPort());
                 udpSocket.send(pkt);
                 System.out.println("retx\t" + seg.getSeqNum());
             }

@@ -110,7 +110,9 @@ public class GoBackFtp {
 
 	}
 
-
+	/**
+	 * Attributes class to hold the arguments
+	 */
 	public class Attributes {
 		private String serverName;
 		private int serverPort;
@@ -156,11 +158,12 @@ public class GoBackFtp {
 
 	}
 
-
+	//Helper method to start the resend timer task
 	public static synchronized void startTimerTask(Attributes atts, DatagramSocket udpSocket){
 		resendTask = new ResendTask(atts, udpSocket);
 		timer.scheduleAtFixedRate(resendTask, rtoTimer, rtoTimer);
 	}
+	//Helper method to stop the resend timer task
 	public static synchronized void stopTimerTask(){
 		resendTask.cancel();
 	}
@@ -174,25 +177,27 @@ public class GoBackFtp {
 	 */
 	public void send(String serverName, int serverPort, String fileName) throws FtpException {
 		try{
+			//Handshake
 			setServerName(serverName);
 			handshake(serverName, serverPort, fileName, udpSocket.getLocalPort());
 			Attributes atts = new Attributes(serverName, serverUdpPort, fileName, getWindowSize(), getInitSeqNo());
 
-
+			//Start the receive thread
 			ReceiveTask receiveTask = new ReceiveTask(atts, getUdpSocket());
 			Thread receiveThread = new Thread(receiveTask);
 			receiveThread.start();
 
 
-
+			//Start the send thread
 			SendTask sendTask = new SendTask(atts, getUdpSocket());
 			Thread sendThread = new Thread(sendTask);
 			sendThread.start();
 
-
+			//Wait for the send and receive thread to finish
 			sendThread.join();
 			receiveThread.join();
 
+			//Cancel the Timer
 			timer.cancel();
 			timer.purge();
 		}catch(Exception e){

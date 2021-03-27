@@ -40,8 +40,8 @@ public class SendTask implements Runnable {
         FileInputStream inputStream = null;
         try {
             inputStream = new FileInputStream(fileName);
-            while ((bytesRead = inputStream.read(sendBuffer)) != -1) {
-                if (bytesRead < MAX_PAYLOAD_SIZE) {
+            while ((bytesRead = inputStream.read(sendBuffer)) != -1) {                                                  /*Read from the file*/
+                if (bytesRead < MAX_PAYLOAD_SIZE) {                                                                     /*If it is the last segment, hence less than 1400bytes*/
                     byte[] smallerData = new byte[bytesRead];
                     System.arraycopy(sendBuffer, 0, smallerData, 0, bytesRead);
                     sendBuffer = smallerData;
@@ -50,15 +50,14 @@ public class SendTask implements Runnable {
                 DatagramPacket pkt = FtpSegment.makePacket(seg, serverAddr, atts.getServerPort());
 
 
-                while(GoBackFtp.getGbnQ().size() == windowSize){
-                    //GoBackFtp.getGbnQ().wait();
+                while(GoBackFtp.getGbnQ().size() == windowSize)                                                         /*While the queue is full, wait*/
                     Thread.yield();
-                }
+
 
                 udpSocket.send(pkt);
                 System.out.println("send " + seqNo);
-                GoBackFtp.getGbnQ().add(seg);
-                if(GoBackFtp.getGbnQ().size() == 1)
+                GoBackFtp.getGbnQ().add(seg);                                                                           /*Add the sent segment to the queue*/
+                if(GoBackFtp.getGbnQ().size() == 1)                                                                     /*If it's the first segment, start the timer*/
                     GoBackFtp.startTimerTask(atts, udpSocket);
                 seqNo += 1;
 

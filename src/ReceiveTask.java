@@ -22,19 +22,21 @@ public class ReceiveTask implements Runnable {
     public void run(){
         byte[] receiveBuffer;
         try{
+            //While the Queue is not empty or the send thread is not done, do:
             while(!GoBackFtp.getGbnQ().isEmpty() || !GoBackFtp.isSendIsDone()){
                 receiveBuffer = new byte[MAX_PAYLOAD_SIZE];
+                //If the queue is not empty
                 if(!GoBackFtp.getGbnQ().isEmpty()){
-                    FtpSegment recSeg = new FtpSegment(GoBackFtp.getGbnQ().peek().getSeqNum()+1, receiveBuffer);
+                    FtpSegment recSeg = new FtpSegment(GoBackFtp.getGbnQ().peek().getSeqNum()+1,
+                            receiveBuffer);                                                                             /*Create a segment with SeqNo+1 of the segment at head of the queue*/
                     DatagramPacket pkt = FtpSegment.makePacket(recSeg, serverAddress, atts.getServerPort());
-                    udpSocket.receive(pkt);
+                    udpSocket.receive(pkt);                                                                             /*Receive the packet*/
                     System.out.println("ack\t"+GoBackFtp.getGbnQ().peek().getSeqNum()+1);
-                    GoBackFtp.stopTimerTask();
+                    GoBackFtp.stopTimerTask();                                                                          /*Cancel the timer if the ack is valid*/
                 }
-                if(GoBackFtp.getGbnQ().poll() != null){
-                    //GoBackFtp.getGbnQ().notify();
-                    GoBackFtp.startTimerTask(atts, udpSocket);
-                }
+                if(GoBackFtp.getGbnQ().poll() != null)                                                                  /*Remove the acked segment from the queue*/
+                    GoBackFtp.startTimerTask(atts, udpSocket);                                                          /*If the queue is not empty, start the timer*/
+
 
             }
         }
