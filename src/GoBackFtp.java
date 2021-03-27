@@ -25,7 +25,7 @@ public class GoBackFtp {
 	private static long rtoTimer;
 	private static Timer timer;
 	private static ResendTask resendTask;
-	private static ConcurrentLinkedQueue<FtpSegment> gbnQ;
+	private static ConcurrentLinkedQueue<FtpSegment> gbnQ = new ConcurrentLinkedQueue<FtpSegment>();
 
 	public long getFileLen() {
 		return fileLen;
@@ -79,6 +79,7 @@ public class GoBackFtp {
 	private int serverUdpPort;
 	private String serverName;
 	private static volatile boolean sendIsDone = false;
+	private Attributes atts;
 
 	public static boolean isSendIsDone() {
 		return sendIsDone;
@@ -101,7 +102,7 @@ public class GoBackFtp {
 		this.timer = new Timer();
 		try{
 			udpSocket = new DatagramSocket();
-			udpSocket.setSoTimeout(2000);
+			udpSocket.setSoTimeout(5000);
 
 		}catch(IOException e){
 			e.printStackTrace();
@@ -156,7 +157,8 @@ public class GoBackFtp {
 	}
 
 
-	public static synchronized void startTimerTask(){
+	public static synchronized void startTimerTask(Attributes atts, DatagramSocket udpSocket){
+		resendTask = new ResendTask(atts, udpSocket);
 		timer.scheduleAtFixedRate(resendTask, rtoTimer, rtoTimer);
 	}
 	public static synchronized void stopTimerTask(){
@@ -174,15 +176,25 @@ public class GoBackFtp {
 		try{
 			setServerName(serverName);
 			handshake(serverName, serverPort, fileName, udpSocket.getLocalPort());
-			Attributes atts = new Attributes(serverName, serverPort, fileName, getWindowSize(), getInitSeqNo());
-			resendTask = new ResendTask(atts, getUdpSocket());
+			Attributes atts = new Attributes(serverName, serverUdpPort, fileName, getWindowSize(), getInitSeqNo());
+
+
+			ReceiveTask receiveTask = new ReceiveTask(atts, getUdpSocket());
+			Thread receiveThread = new Thread(receiveTask);
+			receiveThread.start();
+
+
 
 			SendTask sendTask = new SendTask(atts, getUdpSocket());
 			Thread sendThread = new Thread(sendTask);
 			sendThread.start();
-			ReceiveTask receiveTask = new ReceiveTask(atts, getUdpSocket());
-			Thread receiveThread = new Thread(receiveTask);
-			receiveThread.start();
+
+
+			sendThread.join();
+			receiveThread.join();
+
+			timer.cancel();
+			timer.purge();
 		}catch(Exception e){
 			throw new FtpException(e.getMessage());
 		}

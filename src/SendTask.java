@@ -34,7 +34,6 @@ public class SendTask implements Runnable {
 
 
     public void run() {
-        Object senderIsDone = new Object();
         byte[] sendBuffer = new byte[MAX_PAYLOAD_SIZE];
         int bytesRead;
         File file = new File(fileName);
@@ -47,16 +46,20 @@ public class SendTask implements Runnable {
                     System.arraycopy(sendBuffer, 0, smallerData, 0, bytesRead);
                     sendBuffer = smallerData;
                 }
-                while(GoBackFtp.getGbnQ().size() == windowSize)
-                    Thread.yield();
-
                 FtpSegment seg = new FtpSegment(seqNo, sendBuffer);
                 DatagramPacket pkt = FtpSegment.makePacket(seg, serverAddr, atts.getServerPort());
+
+
+                while(GoBackFtp.getGbnQ().size() == windowSize){
+                    //GoBackFtp.getGbnQ().wait();
+                    Thread.yield();
+                }
+
                 udpSocket.send(pkt);
                 System.out.println("send " + seqNo);
                 GoBackFtp.getGbnQ().add(seg);
                 if(GoBackFtp.getGbnQ().size() == 1)
-                    GoBackFtp.startTimerTask();
+                    GoBackFtp.startTimerTask(atts, udpSocket);
                 seqNo += 1;
 
 

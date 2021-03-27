@@ -24,12 +24,18 @@ public class ReceiveTask implements Runnable {
         try{
             while(!GoBackFtp.getGbnQ().isEmpty() || !GoBackFtp.isSendIsDone()){
                 receiveBuffer = new byte[MAX_PAYLOAD_SIZE];
-                FtpSegment recSeg = new FtpSegment(GoBackFtp.getGbnQ().peek().getSeqNum(), receiveBuffer);
-                DatagramPacket pkt = FtpSegment.makePacket(recSeg, this.serverAddress, atts.getServerPort());
-                udpSocket.receive(pkt);
-                GoBackFtp.stopTimerTask();
-                if(GoBackFtp.getGbnQ().poll() != null)
-                    GoBackFtp.startTimerTask();
+                if(!GoBackFtp.getGbnQ().isEmpty()){
+                    FtpSegment recSeg = new FtpSegment(GoBackFtp.getGbnQ().peek().getSeqNum()+1, receiveBuffer);
+                    DatagramPacket pkt = FtpSegment.makePacket(recSeg, serverAddress, atts.getServerPort());
+                    udpSocket.receive(pkt);
+                    System.out.println("ack\t"+GoBackFtp.getGbnQ().peek().getSeqNum()+1);
+                    GoBackFtp.stopTimerTask();
+                }
+                if(GoBackFtp.getGbnQ().poll() != null){
+                    //GoBackFtp.getGbnQ().notify();
+                    GoBackFtp.startTimerTask(atts, udpSocket);
+                }
+
             }
         }
         catch(IOException e){

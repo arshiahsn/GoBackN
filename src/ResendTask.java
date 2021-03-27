@@ -38,8 +38,7 @@ public class ResendTask extends TimerTask {
             for (FtpSegment seg : GoBackFtp.getGbnQ()){
                 DatagramPacket pkt = FtpSegment.makePacket(seg, InetAddress.getByName(atts.getServerName()), atts.getServerPort());
                 udpSocket.send(pkt);
-                System.out.println("retx\t" + seq);
-                seq++;
+                System.out.println("retx\t" + seg.getSeqNum());
             }
 
         } catch (IOException e) {
