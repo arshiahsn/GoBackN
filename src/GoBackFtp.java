@@ -102,7 +102,7 @@ public class GoBackFtp {
 		this.timer = new Timer();
 		try{
 			udpSocket = new DatagramSocket();
-			udpSocket.setSoTimeout(5000);
+			udpSocket.setSoTimeout(2000);
 
 		}catch(IOException e){
 			e.printStackTrace();

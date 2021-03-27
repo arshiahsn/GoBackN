@@ -2,15 +2,7 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="88bd3212-4073-4c42-93fc-cae21d411f43" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/cpsc441-a5/GoBackFtp.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/cpsc441-a5/GoBackFtp.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/cpsc441-a5/ReceiveTask.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/cpsc441-a5/ReceiveTask.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/cpsc441-a5/ResendTask.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/cpsc441-a5/ResendTask.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/cpsc441-a5/SendTask.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/cpsc441-a5/SendTask.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/GoBackFtp.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/GoBackFtp.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ReceiveTask.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/ReceiveTask.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ResendTask.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/ResendTask.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/SendTask.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/SendTask.java" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
