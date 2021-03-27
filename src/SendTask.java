@@ -11,62 +11,58 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class SendTask implements Runnable {
     private String fileName;
-    private int bufferSize;
-    private ConcurrentLinkedQueue<DatagramPacket> gbnQ;
     private int windowSize;
     private int seqNo;
-    private int serverPort;
     private InetAddress serverAddr;
-    private int rtoTimer;
     DatagramSocket udpSocket;
-    Timer timer;
+    private GoBackFtp.Attributes atts;
+    public final int MAX_PAYLOAD_SIZE = 1400;
 
 
-    public SendTask(ConcurrentLinkedQueue<DatagramPacket> gbnQ, GoBackFtp.Attributes atts, DatagramSocket udpSocket, int rtoTimer) throws UnknownHostException {
-        this.fileName = atts.getFileName();
-        this.bufferSize = 1400;
-        this.gbnQ = gbnQ;
-        this.windowSize = atts.getWindowSize();
-        this.seqNo = atts.getInitSeqNo();
-        this.serverAddr = InetAddress.getByName(atts.getServerName());
-        this.serverPort = atts.getServerPort();
-        this.udpSocket = udpSocket;
-        timer = new Timer();
-        this.rtoTimer = rtoTimer;
+    public SendTask(GoBackFtp.Attributes atts, DatagramSocket udpSocket) throws UnknownHostException {
+
+            this.fileName = atts.getFileName();
+            this.windowSize = atts.getWindowSize();
+            this.seqNo = atts.getInitSeqNo();
+            this.udpSocket = udpSocket;
+            this.serverAddr = InetAddress.getByName(atts.getServerName());
+            this.atts = atts;
+
+
     }
 
-    public synchronized void startTimerTask(ResendTask resendTask){
-        timer.scheduleAtFixedRate(resendTask, rtoTimer, rtoTimer);
-    }
 
 
     public void run() {
-        byte[] sendBuffer = new byte[bufferSize];
+        Object senderIsDone = new Object();
+        byte[] sendBuffer = new byte[MAX_PAYLOAD_SIZE];
         int bytesRead;
         File file = new File(fileName);
         FileInputStream inputStream = null;
         try {
             inputStream = new FileInputStream(fileName);
             while ((bytesRead = inputStream.read(sendBuffer)) != -1) {
-                if (bytesRead < bufferSize) {
+                if (bytesRead < MAX_PAYLOAD_SIZE) {
                     byte[] smallerData = new byte[bytesRead];
                     System.arraycopy(sendBuffer, 0, smallerData, 0, bytesRead);
                     sendBuffer = smallerData;
                 }
-                while(gbnQ.size() == windowSize)
+                while(GoBackFtp.getGbnQ().size() == windowSize)
                     Thread.yield();
 
                 FtpSegment seg = new FtpSegment(seqNo, sendBuffer);
-                DatagramPacket pkt = FtpSegment.makePacket(seg, serverAddr, serverPort);
+                DatagramPacket pkt = FtpSegment.makePacket(seg, serverAddr, atts.getServerPort());
                 udpSocket.send(pkt);
                 System.out.println("send " + seqNo);
-                gbnQ.add(pkt);
-                if(gbnQ.size() == 1)
-                    startTimerTask(new ResendTask(gbnQ, seqNo, udpSocket));
+                GoBackFtp.getGbnQ().add(seg);
+                if(GoBackFtp.getGbnQ().size() == 1)
+                    GoBackFtp.startTimerTask();
                 seqNo += 1;
 
 
             }
+
+            GoBackFtp.setSendIsDone(true);
 
         } catch (FileNotFoundException e) {
             e.printStackTrace();

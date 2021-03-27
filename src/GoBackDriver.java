@@ -18,7 +18,7 @@ import java.util.logging.*;
 public class GoBackDriver {
 	
 	private static final Logger logger = Logger.getLogger("GoBackFtp"); // global logger
-	
+
 	/**
 	 * main
 	 */

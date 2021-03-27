@@ -1,6 +1,8 @@
 import javax.swing.text.Segment;
+import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -14,8 +16,8 @@ public class ResendTask extends TimerTask {
 
     private DatagramSocket udpSocket;
     private int seq;
-    private ConcurrentLinkedQueue<DatagramPacket> gbnQ;
-
+    private GoBackFtp.Attributes atts;
+    public final int MAX_PAYLOAD_SIZE = 1400;
 
     /**
      * Constructor to resend timer
@@ -24,23 +26,23 @@ public class ResendTask extends TimerTask {
      * @param seq_	Sequence number of the packet to resend
      * @param udpSocket_ the UDP socket used to send the packets
      */
-    public ResendTask(ConcurrentLinkedQueue<DatagramPacket> gbnQ_, int SeqNo, DatagramSocket udpSocket_){
-        this.gbnQ = gbnQ_;
+    public ResendTask(GoBackFtp.Attributes atts, DatagramSocket udpSocket_){
         udpSocket = udpSocket_;
-        seq = seqNo;
+        this.atts = atts;
     }
 
     @Override
     public void run() {
         System.out.println("timeout\t");
         try {
-            for (DatagramPacket pkt : gbnQ){
+            for (FtpSegment seg : GoBackFtp.getGbnQ()){
+                DatagramPacket pkt = FtpSegment.makePacket(seg, InetAddress.getByName(atts.getServerName()), atts.getServerPort());
                 udpSocket.send(pkt);
                 System.out.println("retx\t" + seq);
                 seq++;
             }
 
-        } catch (Exception e) {
+        } catch (IOException e) {
             e.printStackTrace();
         }
 

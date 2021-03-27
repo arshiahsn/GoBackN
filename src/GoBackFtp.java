@@ -22,6 +22,11 @@ import java.util.logging.*;
 
 public class GoBackFtp {
 
+	private static long rtoTimer;
+	private static Timer timer;
+	private static ResendTask resendTask;
+	private static ConcurrentLinkedQueue<FtpSegment> gbnQ;
+
 	public long getFileLen() {
 		return fileLen;
 	}
@@ -30,9 +35,6 @@ public class GoBackFtp {
 		this.fileLen = fileLen;
 	}
 
-	public int getServerUdpPort() {
-		return serverUdpPort;
-	}
 
 	public void setServerUdpPort(int serverUdpPort) {
 		this.serverUdpPort = serverUdpPort;
@@ -46,59 +48,19 @@ public class GoBackFtp {
 		this.initSeqNo = initSeqNo;
 	}
 
-	public static int getMaxPayloadSize() {
-		return MAX_PAYLOAD_SIZE;
-	}
 
-	public ConcurrentLinkedQueue getGbnQ() {
+	public static ConcurrentLinkedQueue<FtpSegment> getGbnQ() {
 		return gbnQ;
 	}
 
-	public void setGbnQ(ConcurrentLinkedQueue gbnQ) {
-		this.gbnQ = gbnQ;
-	}
-
-	public Timer getTimer() {
-		return timer;
-	}
-
-	public void setTimer(Timer timer) {
-		this.timer = timer;
-	}
 
 	public DatagramSocket getUdpSocket() {
 		return udpSocket;
 	}
 
-	public void setUdpSocket(DatagramSocket udpSocket) {
-		this.udpSocket = udpSocket;
-	}
-
-	public int getRtoTimer() {
-		return rtoTimer;
-	}
-
-	public void setRtoTimer(int rtoTimer) {
-		this.rtoTimer = rtoTimer;
-	}
 
 	public int getWindowSize() {
 		return windowSize;
-	}
-
-	public void setWindowSize(int windowSize) {
-		this.windowSize = windowSize;
-	}
-	public int getCurrentSeqNo() {
-		return currentSeqNo;
-	}
-
-	public void setCurrentSeqNo(int currentSeqNo) {
-		this.currentSeqNo = currentSeqNo;
-	}
-
-	public String getServerName() {
-		return serverName;
 	}
 
 	public void setServerName(String serverName) {
@@ -109,16 +71,23 @@ public class GoBackFtp {
 	private int initSeqNo;
 	private int currentSeqNo;
 	public final static int MAX_PAYLOAD_SIZE = 1400; // bytes
-	private ConcurrentLinkedQueue<DatagramPacket> gbnQ;
-	private Timer timer;
-	DatagramSocket udpSocket;
-	private int rtoTimer;
+	private DatagramSocket udpSocket;
 	private int windowSize;
 	// global logger
 	private static final Logger logger = Logger.getLogger("GoBackFtp");
 	private long fileLen;
 	private int serverUdpPort;
 	private String serverName;
+	private static volatile boolean sendIsDone = false;
+
+	public static boolean isSendIsDone() {
+		return sendIsDone;
+	}
+
+	public static void setSendIsDone(boolean sendIsDone) {
+		GoBackFtp.sendIsDone = sendIsDone;
+	}
+
 
 	/**
 	 * Constructor to initialize the program
@@ -129,21 +98,15 @@ public class GoBackFtp {
 	public GoBackFtp(int windowSize, int rtoTimer){
 		this.windowSize = windowSize;
 		this.rtoTimer = rtoTimer;
-		timer = new Timer();
+		this.timer = new Timer();
 		try{
 			udpSocket = new DatagramSocket();
+			udpSocket.setSoTimeout(2000);
 
 		}catch(IOException e){
 			e.printStackTrace();
 		}
 
-	}
-
-
-
-
-	public synchronized void cancelTimerTask(ResendTask resendTask){
-		resendTask.cancel();
 	}
 
 
@@ -155,41 +118,28 @@ public class GoBackFtp {
 			return serverName;
 		}
 
-		public void setServerName(String serverName) {
-			this.serverName = serverName;
-		}
 
 		public int getServerPort() {
 			return serverPort;
 		}
 
-		public void setServerPort(int serverPort) {
-			this.serverPort = serverPort;
-		}
 
 		public String getFileName() {
 			return fileName;
 		}
 
-		public void setFileName(String fileName) {
-			this.fileName = fileName;
-		}
+
 
 		public int getWindowSize() {
 			return windowSize;
 		}
 
-		public void setWindowSize(int windowSize) {
-			this.windowSize = windowSize;
-		}
+
 
 		public int getInitSeqNo() {
 			return initSeqNo;
 		}
 
-		public void setInitSeqNo(int initSeqNo) {
-			this.initSeqNo = initSeqNo;
-		}
 
 		private String fileName;
 		private int windowSize;
@@ -206,6 +156,12 @@ public class GoBackFtp {
 	}
 
 
+	public static synchronized void startTimerTask(){
+		timer.scheduleAtFixedRate(resendTask, rtoTimer, rtoTimer);
+	}
+	public static synchronized void stopTimerTask(){
+		resendTask.cancel();
+	}
 	/**
 	 * Send the specified file to the specified remote server
 	 * 
@@ -214,52 +170,24 @@ public class GoBackFtp {
 	 * @param fileName		Name of the file to be trasferred to the rmeote server
 	 * @throws FtpException If anything goes wrong while sending the file
 	 */
-	public void send(String serverName, int serverPort, String fileName) throws FtpException, IOException {
-		setServerName(serverName);
-		handshake(serverName, serverPort, fileName, udpSocket.getLocalPort());
-		Attributes atts = new Attributes(serverName, serverPort, fileName, getWindowSize(), getInitSeqNo());
+	public void send(String serverName, int serverPort, String fileName) throws FtpException {
+		try{
+			setServerName(serverName);
+			handshake(serverName, serverPort, fileName, udpSocket.getLocalPort());
+			Attributes atts = new Attributes(serverName, serverPort, fileName, getWindowSize(), getInitSeqNo());
+			resendTask = new ResendTask(atts, getUdpSocket());
 
-			SendTask sendTask = new SendTask(getGbnQ(), atts, getUdpSocket(), getRtoTimer());
-			ResendTask resendTask = new ResendTask(gbnQ, udpSocket, getCurrentSeqNo());
-			startTimerTask(resendTask);
-			ReceiveTask receiveTask = new ReceiveTask(gbnQ);
-			cancelTimerTask(timerTask);
-
-
-
-
+			SendTask sendTask = new SendTask(atts, getUdpSocket());
+			Thread sendThread = new Thread(sendTask);
+			sendThread.start();
+			ReceiveTask receiveTask = new ReceiveTask(atts, getUdpSocket());
+			Thread receiveThread = new Thread(receiveTask);
+			receiveThread.start();
+		}catch(Exception e){
+			throw new FtpException(e.getMessage());
 		}
 
-
-
-
-
-	public ConcurrentLinkedQueue<DatagramPacket> makeQ(byte[] sendBuffer, int initSeqNo) throws UnknownHostException {
-		ConcurrentLinkedQueue<DatagramPacket> q = new ConcurrentLinkedQueue();
-		int startIdx = 0;
-		int len = sendBuffer.length;
-		byte[] packetBuffer;
-		int seqNo = initSeqNo;
-
-		while(len > 0){
-			if(len < MAX_PAYLOAD_SIZE)
-				packetBuffer = new byte[len];
-			else
-				packetBuffer = new byte[MAX_PAYLOAD_SIZE];
-
-			ByteBuffer bb = ByteBuffer.wrap(sendBuffer);
-			bb.get(packetBuffer, startIdx, sendBuffer.length);
-			startIdx += (MAX_PAYLOAD_SIZE + 1);
-			FtpSegment seg = new FtpSegment(seqNo, packetBuffer);
-			DatagramPacket pkt = FtpSegment.makePacket(seg, InetAddress.getByName(getServerName()), getServerUdpPort());
-			q.add(pkt);
-			seqNo += 1;
-
-		}
-		setCurrentSeqNo(seqNo);
-		return q;
 	}
-
 
 
 
