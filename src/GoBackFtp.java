@@ -111,7 +111,7 @@ public class GoBackFtp {
 	}
 
 	/**
-	 * Attributes class to hold the arguments
+	 * Attributes class to hold the argumentsStopWaitFtp.java
 	 */
 	public class Attributes {
 		private String serverName;

@@ -1,8 +1,6 @@
+import java.awt.*;
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
+import java.net.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class ReceiveTask implements Runnable {
@@ -12,14 +10,20 @@ public class ReceiveTask implements Runnable {
     public final int MAX_PAYLOAD_SIZE = 1400;
     private InetAddress serverAddress;
 
-    public ReceiveTask(GoBackFtp.Attributes atts, DatagramSocket udpSocket) throws UnknownHostException {
-        this.atts = atts;
-        this.udpSocket = udpSocket;
-        this.serverAddress = InetAddress.getByName(atts.getServerName());
+    public ReceiveTask(GoBackFtp.Attributes atts, DatagramSocket udpSocket)  throws FtpException{
+        try{
+            this.atts = atts;
+            this.udpSocket = udpSocket;
+            this.serverAddress = InetAddress.getByName(atts.getServerName());
+
+        }
+        catch(Exception e){
+            throw new FtpException(e.getMessage());
+        }
 
     }
 
-    public void run(){
+    public void run() {
         byte[] receiveBuffer;
         try{
             //While the Queue is not empty or the send thread is not done, do:
@@ -27,21 +31,33 @@ public class ReceiveTask implements Runnable {
                 receiveBuffer = new byte[MAX_PAYLOAD_SIZE];
                 //If the queue is not empty
                 if(!GoBackFtp.getGbnQ().isEmpty()){
-                    FtpSegment recSeg = new FtpSegment(GoBackFtp.getGbnQ().peek().getSeqNum()+1,
-                            receiveBuffer);                                                                             /*Create a segment with SeqNo+1 of the segment at head of the queue*/
-                    DatagramPacket pkt = FtpSegment.makePacket(recSeg, serverAddress, atts.getServerPort());
+                                                                          /*Create a segment with SeqNo+1 of the segment at head of the queue*/
+                    DatagramPacket pkt = new DatagramPacket(receiveBuffer, MAX_PAYLOAD_SIZE, serverAddress, atts.getServerPort());
                     udpSocket.receive(pkt);                                                                             /*Receive the packet*/
-                    System.out.println("ack\t"+GoBackFtp.getGbnQ().peek().getSeqNum()+1);
-                    GoBackFtp.stopTimerTask();                                                                          /*Cancel the timer if the ack is valid*/
+                    int recAckSeq = new FtpSegment(pkt).getSeqNum();
+                    System.out.println("ack\t"+recAckSeq);
+                    if(GoBackFtp.getGbnQ().peek().getSeqNum() <= recAckSeq-1){
+                        while (GoBackFtp.getGbnQ().peek().getSeqNum() <= recAckSeq-1)
+                            GoBackFtp.getGbnQ().poll();
+                        GoBackFtp.stopTimerTask();
+                        if(!GoBackFtp.getGbnQ().isEmpty())
+                            GoBackFtp.startTimerTask(atts, udpSocket);
+                    }
+
+
                 }
-                if(GoBackFtp.getGbnQ().poll() != null)                                                                  /*Remove the acked segment from the queue*/
-                    GoBackFtp.startTimerTask(atts, udpSocket);                                                          /*If the queue is not empty, start the timer*/
-
-
             }
-        }
-        catch(IOException e){
-            e.printStackTrace();
+
+
+
+
+
+    }
+        catch(Exception e){
+            //Timeout
+            //End of the queue
+            //Log
+
         }
 
 
